@@ -1,7 +1,7 @@
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
-const { spawnSync } = require("child_process");
+const { execSync } = require("child_process");
 
 const webpack = require("webpack");
 const release = require("release-it");
@@ -97,7 +97,7 @@ module.exports = (grunt) => {
     grunt.registerTask("build:esm", "Use tsc to create ES module files in build/esm/", function (arg) {
         log("ESM: Building to ./build/esm/");
         fs.mkdirSync(BUILD_ESM_DIR, { recursive: true });
-        spawnSync("cp", ["-r", "src", "build/esm/"], { stdio: "inherit" });
+        execSync("cp ./src/* ./build/esm/");
         // The build/esm/ folder needs a package.json that specifies { "type": "module" }.
         // This indicates that all *.js files in `build/esm/` are ES modules.
         fs.writeFileSync(BUILD_ESM_PACKAGE_JSON_FILE, '{\n  "type": "module"\n}\n');

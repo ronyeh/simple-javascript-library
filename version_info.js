@@ -25,7 +25,7 @@ module.exports = {
 
     // Save the build information to build/esm/src/version.js
     saveESMVersionFile() {
-        const outputFile = path.join(__dirname, "build", "esm", "src", "version.js");
+        const outputFile = path.join(__dirname, "build", "esm", "version.js");
         const V = `export const VERSION = '${VERSION}';`;
         const I = `export const ID = '${GIT_COMMIT_ID}';`;
         const D = `export const DATE = '${DATE}';`;

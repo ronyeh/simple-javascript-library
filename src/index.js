@@ -1,4 +1,4 @@
-import { MathUtils } from "./math";
+import { MathUtils } from "./math.js";
 
 class SimpleJSLib {
     static sayHello() {

@@ -191,10 +191,8 @@ module.exports = (grunt) => {
             }
         });
 
-        console.log(options);
-
         release(options).then((output) => {
-            log(output);
+            console.log(output);
             try {
                 // If the build/ folder is currently checked in to the repo, we remove it.
                 log("Removing build/ folder...");

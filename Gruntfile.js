@@ -1,9 +1,8 @@
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
-const { execSync } = require("child_process");
+const { execSync, spawnSync } = require("child_process");
 
-const webpack = require("webpack");
 const release = require("release-it");
 
 const versionInfo = require("./version_info");
@@ -18,55 +17,45 @@ const BUILD_ESM_PACKAGE_JSON_FILE = path.join(BUILD_ESM_DIR, "package.json");
 const PRODUCTION_MODE = "production";
 const DEVELOPMENT_MODE = "development";
 
-function webpackConfigs() {
-    // returns a webpack config object.
-    function getConfig(mode, libraryName) {
-        const globalObject = `(typeof window !== 'undefined' ? window : typeof globalThis !== 'undefined' ? globalThis : this)`;
-
-        return {
-            mode,
-            entry: "./src/index.js",
-            output: {
-                path: BUILD_CJS_DIR,
-                filename: "lib.js",
-                library: {
-                    name: libraryName,
-                    type: "umd",
-                    export: "default",
-                },
-                globalObject,
-            },
-            resolve: { extensions: [".js", "..."] },
-            module: {
-                rules: [
-                    {
-                        test: /version\.js$/,
-                        loader: "string-replace-loader",
-                        options: {
-                            multiple: [
-                                { search: "__VERSION__", replace: versionInfo.VERSION },
-                                { search: "__GIT_COMMIT_ID__", replace: versionInfo.ID },
-                                { search: "__BUILD_DATE__", replace: versionInfo.DATE },
-                            ],
-                        },
-                    },
-                ],
-            },
-        };
-    }
-
-    function prodConfig() {
-        return getConfig(PRODUCTION_MODE, "SimpleJSLib");
-    }
-
-    function debugConfig() {
-        return getConfig(DEVELOPMENT_MODE, "SimpleJSLib");
-    }
+// returns a webpack config object.
+function getConfig(mode, libraryName) {
+    const globalObject = `(typeof window !== 'undefined' ? window : typeof globalThis !== 'undefined' ? globalThis : this)`;
 
     return {
-        // grunt webpack:prodAndDebug
-        prodAndDebug: () => [prodConfig(), debugConfig()],
+        mode,
+        entry: "./src/index.js",
+        output: {
+            path: BUILD_CJS_DIR,
+            filename: "lib.js",
+            library: {
+                name: libraryName,
+                type: "umd",
+                export: "default",
+            },
+            globalObject,
+        },
+        resolve: { extensions: [".js", "..."] },
+        module: {
+            rules: [
+                {
+                    test: /version\.js$/,
+                    loader: "string-replace-loader",
+                    options: {
+                        multiple: [
+                            { search: "__VERSION__", replace: versionInfo.VERSION },
+                            { search: "__GIT_COMMIT_ID__", replace: versionInfo.ID },
+                            { search: "__BUILD_DATE__", replace: versionInfo.DATE },
+                        ],
+                    },
+                },
+            ],
+        },
     };
+}
+
+function runCommand(command, ...args) {
+    // The stdio option passes the output from the spawned process back to this process's console.
+    spawnSync(command, args, { stdio: "inherit" });
 }
 
 module.exports = (grunt) => {
@@ -74,7 +63,13 @@ module.exports = (grunt) => {
 
     grunt.initConfig({
         pkg: grunt.file.readJSON("package.json"),
-        webpack: webpackConfigs(),
+        webpack: {
+            prodAndDebug: [
+                // grunt webpack:prodAndDebug
+                getConfig(PRODUCTION_MODE, "SimpleJSLib"),
+                getConfig(DEVELOPMENT_MODE, "SimpleJSLib"),
+            ],
+        },
         // grunt clean
         // Calls all clean tasks below.
         clean: {
@@ -128,50 +123,89 @@ module.exports = (grunt) => {
         // https://github.com/release-it/release-it
         // https://github.com/release-it/release-it/blob/master/config/release-it.json
         const options = {
-            // verbose: 1, // See the output of each hook.
-            // verbose: 2, // Only for debugging.
             hooks: {
                 "before:init": ["grunt clean"],
-                "after:bump": ["grunt", "echo Adding build/ folder...", "git add -f build/", "git commit -m 'Add build/ for release version ${version}.'"],
+                "after:bump": ["grunt", "echo Adding build/ folder...", "git add -f build/"],
                 "after:npm:release": ["echo COMPLETE: Published to npm."],
                 "after:git:release": ["echo COMPLETE: Committed to git repository."],
                 "after:github:release": ["echo COMPLETE: Released to GitHub."],
-                "after:release": [
-                    "echo Removing build/ folder...",
-                    "git rm -rf build/",
-                    "git commit -m 'Remove build/ after releasing version ${version}.'",
-                    "git push",
-                    "echo Successfully released ${name} ${version} to https://github.com/${repo.repository}",
-                ],
+                "after:release": ["echo Successfully released ${name} ${version} to https://github.com/${repo.repository}"],
             },
             git: {
-                changelog: false,
                 commitMessage: "Release ${version}",
+                changelog: true,
                 requireCleanWorkingDir: true,
                 commit: true,
                 tag: true,
                 push: true,
             },
-            github: { release: true },
-            npm: { publish: true },
+            github: {
+                release: true,
+            },
+            npm: {
+                publish: true,
+            },
+            "disable-metrics": true,
         };
 
-        if (args.includes("dry-run")) {
-            options["dry-run"] = true;
-            console.log("====== DRY RUN MODE ======");
-        }
-        // Handle preRelease tags: alpha | beta | rc.
-        if (args.includes("alpha")) {
-            options["preRelease"] = "alpha";
-        }
-        if (args.includes("beta")) {
-            options["preRelease"] = "beta";
-        }
-        if (args.includes("rc")) {
-            options["preRelease"] = "rc";
-        }
+        args.forEach((arg) => {
+            if (arg === "dry-run") {
+                options["dry-run"] = true;
+                log("====== DRY RUN MODE ======");
+            } else if (arg === "alpha") {
+                // Handle preRelease tag: alpha.
+                options["preRelease"] = "alpha";
+            } else if (arg === "beta") {
+                // Handle preRelease tag: beta.
+                options["preRelease"] = "beta";
+            } else if (arg === "rc") {
+                // Handle preRelease tag: rc.
+                options["preRelease"] = "rc";
+            } else if (arg.startsWith("verbose")) {
+                // verbose: 1, // See the output of each hook.
+                // verbose: 2, // Only for debugging.
+                const parts = arg.split("=");
+                if (parts.length === 2) {
+                    const val = parseInt(parts[1]) === 1 ? 1 : 2;
+                    options.verbose = val;
+                }
+            } else if (arg.startsWith("git.")) {
+                // Support boolean flags (e.g., git.commit=false).
+                const parts = arg.split("=");
+                if (parts.length === 2) {
+                    const val = parts[1] === "true"; // everything else is false for now.
+                    options.git[parts[0].substr(4)] = val;
+                }
+            } else if (arg.startsWith("github.")) {
+                const parts = arg.split("=");
+                if (parts.length === 2) {
+                    const val = parts[1] === "true"; // everything else is false for now.
+                    options.github[parts[0].substr(7)] = val;
+                }
+            } else if (arg.startsWith("npm.")) {
+                const parts = arg.split("=");
+                if (parts.length === 2) {
+                    const val = parts[1] === "true"; // everything else is false for now.
+                    options.npm[parts[0].substr(4)] = val;
+                }
+            }
+        });
+
+        console.log(options);
 
         release(options).then((output) => {
+            log(output);
+            try {
+                // If the build/ folder is currently checked in to the repo, we remove it.
+                log("Removing build/ folder...");
+                const hideOutput = { stdio: "pipe" }; // Hide the output of the following two execSync() calls.
+                execSync("git show HEAD:build/", hideOutput);
+                execSync("git rm -rf build/", hideOutput);
+                execSync("git commit -m 'Remove build/ after releasing to npm and GitHub.'");
+                runCommand("git", "push");
+            } catch (e) {
+                // If the build/ folder is not checked in, we do nothing.
+            }
             done();
         });
     });

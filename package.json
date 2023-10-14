@@ -23,13 +23,13 @@
         "src"
     ],
     "devDependencies": {
-        "grunt": "^1.4.1",
+        "grunt": "^1.6.1",
         "grunt-cli": "^1.4.3",
-        "grunt-contrib-clean": "^2.0.0",
-        "grunt-webpack": "^5.0.0",
-        "release-it": "^14.12.3",
+        "grunt-contrib-clean": "^2.0.1",
+        "grunt-webpack": "^6.0.0",
+        "release-it": "^16.2.1",
         "string-replace-loader": "^3.1.0",
-        "webpack": "^5.65.0"
+        "webpack": "^5.89.0"
     },
     "scripts": {
         "start": "grunt"
